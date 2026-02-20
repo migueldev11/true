@@ -1,6 +1,6 @@
 /**
- * P2P ASCII ROGUELIKE
- * Arquitetura Modular | WebRTC (PeerJS) | Gerador de Salas
+ * P2P ASCII ROGUELIKE - Versão Final Otimizada
+ * Arquitetura Modular | WebRTC (PeerJS) | Layout Mobile Adaptativo
  */
 
 const CONFIG = {
@@ -10,10 +10,11 @@ const CONFIG = {
     FONT: '28px "Courier New", monospace'
 };
 
-// --- NETWORKING ---
+// --- NETWORKING (Gerenciamento de Conexão P2P) ---
 class NetworkManager {
     constructor(game) {
         this.game = game;
+        // Gera um ID aleatório de 4 dígitos
         const shortId = Math.floor(1000 + Math.random() * 9000).toString();
         this.peer = new Peer(shortId); 
         this.conn = null;
@@ -21,7 +22,7 @@ class NetworkManager {
 
         this.peer.on('open', (id) => {
             document.getElementById('my-id').innerText = id;
-            document.getElementById('status').innerText = "Pronto! Aguardando ou conecte-se a alguém.";
+            document.getElementById('status').innerText = "Pronto! Passe o ID ou conecte-se.";
         });
 
         this.peer.on('connection', (conn) => {
@@ -44,6 +45,7 @@ class NetworkManager {
             document.getElementById('status').innerText = "CONECTADO!";
             document.getElementById('net-status').innerText = "ONLINE";
             document.getElementById('net-status').style.color = "lime";
+            // Pequeno delay para garantir estabilidade antes de iniciar
             setTimeout(() => this.game.start(this.isHost), 500);
         });
 
@@ -55,13 +57,12 @@ class NetworkManager {
     }
 }
 
-// --- MAP GENERATOR ---
+// --- MAP GENERATOR (Salas e Corredores) ---
 class MapGenerator {
     generate() {
         let grid = Array(CONFIG.MAP_H).fill(0).map(() => Array(CONFIG.MAP_W).fill('#'));
         let rooms = [];
         
-        // BSP/Room Placement Simples
         for (let i = 0; i < 15; i++) {
             let w = Math.floor(Math.random() * 6) + 4;
             let h = Math.floor(Math.random() * 6) + 4;
@@ -74,11 +75,10 @@ class MapGenerator {
             for (let ry = y; ry < y + h; ry++) {
                 for (let rx = x; rx < x + w; rx++) {
                     grid[ry][rx] = '.';
-                    if(Math.random() < 0.02) grid[ry][rx] = '~'; // Lava
+                    if(Math.random() < 0.02) grid[ry][rx] = '~'; // Adiciona Lava aleatória
                 }
             }
 
-            // Conecta com a sala anterior (Corredores)
             if (rooms.length > 0) {
                 let prev = rooms[rooms.length - 1];
                 this.carveCorridor(grid, prev.cx, prev.cy, room.cx, room.cy);
@@ -98,7 +98,7 @@ class MapGenerator {
     }
 }
 
-// --- ENTITIES ---
+// --- ENTITIES (Jogadores e Inimigos) ---
 class Entity {
     constructor(x, y, char, color, hp) {
         this.x = x;
@@ -132,25 +132,24 @@ class Enemy extends Entity {
     }
     update(map, target1, target2) {
         this.moveTimer++;
-        if (this.moveTimer < (this.isBoss ? 40 : 60)) return; // Velocidade do inimigo
+        if (this.moveTimer < (this.isBoss ? 45 : 65)) return; 
         this.moveTimer = 0;
 
-        // Acha o alvo mais próximo
         let d1 = Math.abs(this.x - target1.x) + Math.abs(this.y - target1.y);
-        let d2 = target2 ? Math.abs(this.x - target2.x) + Math.abs(this.y - target2.y) : Infinity;
+        let d2 = (target2 && target2.hp > 0) ? Math.abs(this.x - target2.x) + Math.abs(this.y - target2.y) : Infinity;
         let target = d1 < d2 ? target1 : target2;
-        if (!target) return;
+        
+        if (!target || target.hp <= 0) return;
 
         let dx = Math.sign(target.x - this.x);
         let dy = Math.sign(target.y - this.y);
 
-        // Move ou Ataca
         if (Math.abs(target.x - this.x) + Math.abs(target.y - this.y) === 1) {
-            target.hp -= this.isBoss ? 15 : 5; // Ataca jogador
+            target.hp -= this.isBoss ? 15 : 8; 
         } else {
             let nx = this.x + (Math.random() > 0.5 ? dx : 0);
             let ny = this.y + (nx === this.x ? dy : 0);
-            if (map[ny][nx] === '.') {
+            if (map[ny][nx] !== '#') {
                 this.x = nx;
                 this.y = ny;
             }
@@ -158,7 +157,7 @@ class Enemy extends Entity {
     }
 }
 
-// --- CORE GAME ---
+// --- CORE GAME ENGINE ---
 class Game {
     constructor() {
         this.canvas = document.getElementById('gameCanvas');
@@ -185,39 +184,42 @@ class Game {
         document.getElementById(`btn-${type}`).classList.add('active');
     }
 
+    // NOVA FUNÇÃO RESIZE: Lê o tamanho direto do CSS para suportar o layout mobile
+    resize() {
+        this.canvas.width = this.canvas.clientWidth;
+        this.canvas.height = this.canvas.clientHeight;
+        this.ctx.font = CONFIG.FONT;
+        this.ctx.textBaseline = "bottom";
+    }
+
     start(isHost) {
         document.getElementById('setup-menu').style.display = 'none';
         
-        // Host gera o mapa e envia
         if (isHost) {
             this.mapData = new MapGenerator().generate();
             this.spawnEntities();
-            this.network.send({ type: 'INIT', map: this.mapData.grid, enemies: this.enemies });
+            this.network.send({ type: 'INIT', map: this.mapData.grid, enemies: this.enemies, items: this.items });
         }
         
-        let spawn = isHost ? this.mapData.rooms[0] : {cx: 2, cy: 2}; // Fallback temporário
+        let spawn = isHost ? this.mapData.rooms[0] : {cx: 0, cy: 0}; 
         this.localPlayer = new Player(spawn.cx, spawn.cy, this.classType);
         this.remotePlayer = new Player(spawn.cx, spawn.cy, 'warrior');
         
         document.getElementById('player-class-label').innerText = this.classType.toUpperCase();
-        
-        if (isHost) {
-            this.running = true;
-            requestAnimationFrame(() => this.loop());
-        }
+        this.running = true;
+        requestAnimationFrame(() => this.loop());
     }
 
     spawnEntities() {
         this.enemies = [];
         this.items = [];
-        // Pula a sala 0 (spawn)
         for (let i = 1; i < this.mapData.rooms.length; i++) {
             let room = this.mapData.rooms[i];
             if (i === this.mapData.rooms.length - 1) {
-                this.enemies.push(new Enemy(room.cx, room.cy, true)); // Boss
+                this.enemies.push(new Enemy(room.cx, room.cy, true));
             } else {
-                this.enemies.push(new Enemy(room.cx, room.cy, false)); // Mob
-                if(Math.random() > 0.5) this.items.push({x: room.cx+1, y: room.cy, char: '+', color: '#2ecc71', type: 'heal'});
+                this.enemies.push(new Enemy(room.cx, room.cy, false));
+                if(Math.random() > 0.6) this.items.push({x: room.cx+1, y: room.cy, char: '+', color: '#2ecc71', type: 'heal'});
             }
         }
     }
@@ -226,41 +228,31 @@ class Game {
         if (data.type === 'INIT') {
             this.mapData = { grid: data.map };
             this.enemies = data.enemies.map(e => Object.assign(new Enemy(), e));
-            
-            // Acha um chao livre pro cliente nascer
-            let spawned = false;
-            for(let y=0; y<CONFIG.MAP_H && !spawned; y++) {
-                for(let x=0; x<CONFIG.MAP_W; x++) {
-                    if(this.mapData.grid[y][x] === '.') {
-                        this.localPlayer.x = x; this.localPlayer.y = y;
-                        this.remotePlayer.x = x; this.remotePlayer.y = y;
-                        spawned = true; break;
-                    }
-                }
-            }
-            this.running = true;
-            requestAnimationFrame(() => this.loop());
+            this.items = data.items;
+            // Posiciona o cliente em um local seguro
+            this.localPlayer.x = data.enemies[0].x; 
+            this.localPlayer.y = data.enemies[0].y;
         } else if (data.type === 'SYNC') {
             this.remotePlayer.x = data.x;
             this.remotePlayer.y = data.y;
             this.remotePlayer.hp = data.hp;
             this.remotePlayer.type = data.cType;
-            if(data.enemies) this.enemies = data.enemies; // Host dita os inimigos
-            if(data.atk) this.drawAtk(data.atk.x, data.atk.y);
+            if(data.enemies) this.enemies = data.enemies;
+            if(data.atk) this.drawAtkEffect = { ...data.atk, timer: 10 };
         }
     }
 
     initInput() {
-        const setKey = (k, v) => this.keys[k] = v;
-        window.addEventListener('keydown', e => setKey(e.key.toLowerCase(), true));
-        window.addEventListener('keyup', e => setKey(e.key.toLowerCase(), false));
+        const setKey = (k, v) => this.keys[k.toLowerCase()] = v;
+        window.addEventListener('keydown', e => setKey(e.key, true));
+        window.addEventListener('keyup', e => setKey(e.key, false));
         
         const bindBtn = (id, key) => {
             const btn = document.getElementById(id);
             if(!btn) return;
-            btn.addEventListener('pointerdown', e => { e.preventDefault(); setKey(key, true); });
-            btn.addEventListener('pointerup', e => { e.preventDefault(); setKey(key, false); });
-            btn.addEventListener('pointerleave', e => { e.preventDefault(); setKey(key, false); });
+            btn.addEventListener('pointerdown', (e) => { e.preventDefault(); setKey(key, true); });
+            btn.addEventListener('pointerup', (e) => { e.preventDefault(); setKey(key, false); });
+            btn.addEventListener('pointerleave', (e) => { e.preventDefault(); setKey(key, false); });
         };
         
         bindBtn('up', 'arrowup'); bindBtn('down', 'arrowdown'); 
@@ -268,16 +260,10 @@ class Game {
         bindBtn('btn-atk', 'z'); bindBtn('btn-skill', 'x');
     }
 
-    resize() {
-        this.canvas.width = window.innerWidth > 800 ? 800 : window.innerWidth;
-        this.canvas.height = window.innerWidth > 800 ? 520 : window.innerHeight - 80;
-        this.ctx.font = CONFIG.FONT;
-    }
-
     update() {
-        if (this.localPlayer.hp <= 0) return;
+        if (!this.localPlayer || this.localPlayer.hp <= 0) return;
 
-        // Movimento Grid-based (com cooldown)
+        // Movimento
         if (this.localPlayer.moveDelay > 0) this.localPlayer.moveDelay--;
         else {
             let dx = 0, dy = 0;
@@ -291,113 +277,96 @@ class Game {
                 let ny = this.localPlayer.y + dy;
                 this.localPlayer.dir = {x: dx, y: dy};
                 
-                if (this.mapData.grid[ny][nx] !== '#') {
+                if (this.mapData.grid[ny] && this.mapData.grid[ny][nx] !== '#') {
                     this.localPlayer.x = nx;
                     this.localPlayer.y = ny;
+                    if(this.mapData.grid[ny][nx] === '~') this.localPlayer.hp -= 2;
                     
-                    // Lava damage
-                    if(this.mapData.grid[ny][nx] === '~') this.localPlayer.hp -= 5;
-                    
-                    // Pegar item
                     this.items = this.items.filter(i => {
                         if(i.x === nx && i.y === ny) {
-                            if(i.type === 'heal') this.localPlayer.hp = Math.min(this.localPlayer.maxHp, this.localPlayer.hp + 30);
-                            return false; // Remove map
+                            if(i.type === 'heal') this.localPlayer.hp = Math.min(this.localPlayer.maxHp, this.localPlayer.hp + 25);
+                            return false;
                         }
                         return true;
                     });
                 }
-                this.localPlayer.moveDelay = 8; // Velocidade do andar
+                this.localPlayer.moveDelay = 10;
             }
         }
 
-        // Combate
-        if (this.localPlayer.atkDelay > 0) this.localPlayer.atkDelay--;
+        // Ataque
         let atkPos = null;
-        if (this.keys['z'] && this.localPlayer.atkDelay === 0) {
+        if (this.localPlayer.atkDelay > 0) this.localPlayer.atkDelay--;
+        else if (this.keys['z']) {
             let tx = this.localPlayer.x + this.localPlayer.dir.x;
             let ty = this.localPlayer.y + this.localPlayer.dir.y;
             atkPos = {x: tx, y: ty};
-            
-            // Checa acerto em inimigo
             this.enemies.forEach(e => {
-                if(e.x === tx && e.y === ty) e.hp -= (this.localPlayer.type === 'warrior' ? 20 : 10);
+                if(e.x === tx && e.y === ty) e.hp -= (this.localPlayer.type === 'warrior' ? 20 : 12);
             });
-            
-            this.drawAtk(tx, ty);
-            this.localPlayer.atkDelay = 20;
+            this.localPlayer.atkDelay = 25;
+            this.drawAtkEffect = { x: tx, y: ty, timer: 10 };
         }
 
-        // Host atualiza IA
+        // Lógica do Host
         if (this.network.isHost) {
             this.enemies = this.enemies.filter(e => e.hp > 0);
             this.enemies.forEach(e => e.update(this.mapData.grid, this.localPlayer, this.remotePlayer));
         }
 
-        // Sincroniza P2P
-        let syncData = { 
-            type: 'SYNC', 
-            x: this.localPlayer.x, y: this.localPlayer.y, 
-            hp: this.localPlayer.hp, cType: this.classType,
-            atk: atkPos 
+        // Sincronização
+        let sync = { 
+            type: 'SYNC', x: this.localPlayer.x, y: this.localPlayer.y, 
+            hp: this.localPlayer.hp, cType: this.classType, atk: atkPos 
         };
-        if(this.network.isHost) syncData.enemies = this.enemies;
-        this.network.send(syncData);
+        if(this.network.isHost) sync.enemies = this.enemies;
+        this.network.send(sync);
 
-        // UI
-        let hpPct = Math.max(0, (this.localPlayer.hp / this.localPlayer.maxHp) * 100);
-        document.getElementById('hp-fill').style.width = hpPct + "%";
-    }
-
-    drawAtk(tx, ty) {
-        // Efeito visual rápido direto no loop
-        this.ctx.fillStyle = "rgba(255, 255, 0, 0.5)";
-        let offX = (this.localPlayer.x * CONFIG.TILE_SIZE) - this.canvas.width/2;
-        let offY = (this.localPlayer.y * CONFIG.TILE_SIZE) - this.canvas.height/2;
-        this.ctx.fillRect((tx*CONFIG.TILE_SIZE)-offX, (ty*CONFIG.TILE_SIZE)-offY, CONFIG.TILE_SIZE, CONFIG.TILE_SIZE);
+        document.getElementById('hp-fill').style.width = Math.max(0, (this.localPlayer.hp / this.localPlayer.maxHp) * 100) + "%";
     }
 
     draw() {
-        this.ctx.fillStyle = CONFIG.TILE_SIZE;
         this.ctx.fillStyle = '#000';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-        // Camera centralizada
-        let offX = (this.localPlayer.x * CONFIG.TILE_SIZE) - (this.canvas.width / 2) + (CONFIG.TILE_SIZE/2);
-        let offY = (this.localPlayer.y * CONFIG.TILE_SIZE) - (this.canvas.height / 2) + (CONFIG.TILE_SIZE/2);
+        if (!this.mapData) return;
 
-        this.ctx.font = CONFIG.FONT;
-        this.ctx.textBaseline = "bottom";
+        let offX = (this.localPlayer.x * CONFIG.TILE_SIZE) - (this.canvas.width / 2);
+        let offY = (this.localPlayer.y * CONFIG.TILE_SIZE) - (this.canvas.height / 2);
 
-        // Render Mapa (Viewport Optimization)
-        let startCol = Math.max(0, Math.floor(offX / CONFIG.TILE_SIZE));
-        let endCol = Math.min(CONFIG.MAP_W, startCol + Math.ceil(this.canvas.width / CONFIG.TILE_SIZE) + 1);
-        let startRow = Math.max(0, Math.floor(offY / CONFIG.TILE_SIZE));
-        let endRow = Math.min(CONFIG.MAP_H, startRow + Math.ceil(this.canvas.height / CONFIG.TILE_SIZE) + 1);
-
-        for (let y = startRow; y < endRow; y++) {
-            for (let x = startCol; x < endCol; x++) {
+        // Render Map
+        for (let y = 0; y < CONFIG.MAP_H; y++) {
+            for (let x = 0; x < CONFIG.MAP_W; x++) {
                 let char = this.mapData.grid[y][x];
-                if (char === '#') this.ctx.fillStyle = '#555';
-                else if (char === '.') this.ctx.fillStyle = '#222';
-                else if (char === '~') this.ctx.fillStyle = '#e67e22';
+                let screenX = (x * CONFIG.TILE_SIZE) - offX;
+                let screenY = (y * CONFIG.TILE_SIZE) - offY;
                 
-                this.ctx.fillText(char, (x * CONFIG.TILE_SIZE) - offX, (y * CONFIG.TILE_SIZE) - offY + CONFIG.TILE_SIZE);
+                if (screenX < -32 || screenX > this.canvas.width || screenY < -32 || screenY > this.canvas.height) continue;
+
+                if (char === '#') this.ctx.fillStyle = '#444';
+                else if (char === '.') this.ctx.fillStyle = '#222';
+                else if (char === '~') this.ctx.fillStyle = '#d35400';
+                this.ctx.fillText(char, screenX, screenY + CONFIG.TILE_SIZE);
             }
         }
 
-        // Render Items & Entities
         this.items.forEach(i => {
             this.ctx.fillStyle = i.color;
             this.ctx.fillText(i.char, (i.x * CONFIG.TILE_SIZE) - offX, (i.y * CONFIG.TILE_SIZE) - offY + CONFIG.TILE_SIZE);
         });
-        
+
+        if (this.drawAtkEffect && this.drawAtkEffect.timer > 0) {
+            this.ctx.fillStyle = "rgba(255,255,255,0.4)";
+            this.ctx.fillRect((this.drawAtkEffect.x * CONFIG.TILE_SIZE) - offX, (this.drawAtkEffect.y * CONFIG.TILE_SIZE) - offY, CONFIG.TILE_SIZE, CONFIG.TILE_SIZE);
+            this.drawAtkEffect.timer--;
+        }
+
         this.enemies.forEach(e => e.draw(this.ctx, offX, offY));
-        if(this.remotePlayer && this.remotePlayer.hp > 0) this.remotePlayer.draw(this.ctx, offX, offY);
+        if(this.remotePlayer.hp > 0) this.remotePlayer.draw(this.ctx, offX, offY);
         if(this.localPlayer.hp > 0) this.localPlayer.draw(this.ctx, offX, offY);
         else {
             this.ctx.fillStyle = 'red';
-            this.ctx.fillText("VOCÊ MORREU", this.canvas.width/2 - 100, this.canvas.height/2);
+            this.ctx.fillText("FIM DE JOGO", this.canvas.width/2 - 60, this.canvas.height/2);
         }
     }
 
@@ -410,4 +379,4 @@ class Game {
 }
 
 window.game = new Game();
-                
+        
