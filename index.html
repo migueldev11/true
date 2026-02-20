@@ -3,33 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>P2P Retro Roguelike</title>
+    <title>P2P Roguelike - PeerJS</title>
     <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
 <body>
     <div id="game-container">
         <div id="setup-menu" class="overlay">
-            <h1>DUNGEON P2P</h1>
+            <h1>DUNGEON CO-OP</h1>
             <div class="class-select">
                 <button onclick="window.game.setPlayerClass('warrior')" id="btn-warrior" class="active">GUERREIRO</button>
                 <button onclick="window.game.setPlayerClass('mage')" id="btn-mage">MAGO</button>
             </div>
             
-            <div class="p2p-controls">
-                <div class="p2p-box">
-                    <h3>1. CRIAR SALA</h3>
-                    <button onclick="window.game.network.hostGame()">GERAR CÓDIGO</button>
-                    <textarea id="output-sdp" readonly placeholder="Envie este código ao seu amigo"></textarea>
-                    <button onclick="window.game.network.copySDP('output-sdp')">COPIAR</button>
+            <div class="p2p-controls" style="flex-direction: column; gap: 20px;">
+                <div class="p2p-box" style="width: 300px;">
+                    <h3>SEU ID: <span id="my-id" style="color: #f1c40f;">...</span></h3>
+                    <p style="font-size: 10px;">Passe este ID para seu amigo</p>
                 </div>
                 
-                <div class="p2p-box">
-                    <h3>2. ENTRAR NA SALA</h3>
-                    <textarea id="input-sdp" placeholder="Cole o código recebido aqui"></textarea>
-                    <button onclick="window.game.network.connectP2P()">CONECTAR</button>
+                <div class="p2p-box" style="width: 300px;">
+                    <input type="text" id="join-id" placeholder="Digite o ID do Amigo" 
+                           style="width: 100%; padding: 10px; margin-bottom: 10px; text-align: center;">
+                    <button onclick="window.game.network.connectToPeer()" style="width: 100%;">CONECTAR E JOGAR</button>
                 </div>
             </div>
-            <p class="status-text" id="status">Aguardando conexão...</p>
+            <p id="status" style="margin-top: 20px; color: lime;">Iniciando PeerJS...</p>
         </div>
 
         <canvas id="gameCanvas"></canvas>
@@ -38,31 +37,20 @@
             <div class="stats-bar">
                 <div class="stat-group">
                     <span id="player-class-label">GUERREIRO</span>
-                    <div class="bar-container hp-bar">
-                        <div id="hp-fill" class="bar-fill"></div>
-                    </div>
+                    <div class="bar-container hp-bar"><div id="hp-fill" class="bar-fill"></div></div>
                 </div>
                 <div class="stat-group">
                     <span>HABILIDADE</span>
-                    <div class="bar-container cd-bar">
-                        <div id="cd-fill" class="bar-fill"></div>
-                    </div>
+                    <div class="bar-container cd-bar"><div id="cd-fill" class="bar-fill"></div></div>
                 </div>
-                <div class="inventory" id="inventory">
-                    <div class="slot"></div>
-                    <div class="slot"></div>
-                    <div class="slot"></div>
-                </div>
+                <div class="inventory"><div class="slot"></div><div class="slot"></div><div class="slot"></div></div>
             </div>
         </div>
 
         <div id="touch-controls">
             <div id="dpad">
                 <button id="up">▲</button>
-                <div class="dpad-mid">
-                    <button id="left">◀</button>
-                    <button id="right">▶</button>
-                </div>
+                <div class="dpad-mid"><button id="left">◀</button><button id="right">▶</button></div>
                 <button id="down">▼</button>
             </div>
             <div id="action-buttons">
@@ -74,4 +62,3 @@
     <script src="game.js"></script>
 </body>
 </html>
-0
