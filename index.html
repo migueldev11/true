@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>P2P Retro Roguelike</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="game-container">
+        <div id="setup-menu" class="overlay">
+            <h1>DUNGEON P2P</h1>
+            <div class="class-select">
+                <button onclick="window.game.setPlayerClass('warrior')" id="btn-warrior" class="active">GUERREIRO</button>
+                <button onclick="window.game.setPlayerClass('mage')" id="btn-mage">MAGO</button>
+            </div>
+            
+            <div class="p2p-controls">
+                <div class="p2p-box">
+                    <h3>1. CRIAR SALA</h3>
+                    <button onclick="window.game.network.hostGame()">GERAR CÓDIGO</button>
+                    <textarea id="output-sdp" readonly placeholder="Envie este código ao seu amigo"></textarea>
+                    <button onclick="window.game.network.copySDP('output-sdp')">COPIAR</button>
+                </div>
+                
+                <div class="p2p-box">
+                    <h3>2. ENTRAR NA SALA</h3>
+                    <textarea id="input-sdp" placeholder="Cole o código recebido aqui"></textarea>
+                    <button onclick="window.game.network.connectP2P()">CONECTAR</button>
+                </div>
+            </div>
+            <p class="status-text" id="status">Aguardando conexão...</p>
+        </div>
+
+        <canvas id="gameCanvas"></canvas>
+
+        <div id="ui-layer">
+            <div class="stats-bar">
+                <div class="stat-group">
+                    <span id="player-class-label">GUERREIRO</span>
+                    <div class="bar-container hp-bar">
+                        <div id="hp-fill" class="bar-fill"></div>
+                    </div>
+                </div>
+                <div class="stat-group">
+                    <span>HABILIDADE</span>
+                    <div class="bar-container cd-bar">
+                        <div id="cd-fill" class="bar-fill"></div>
+                    </div>
+                </div>
+                <div class="inventory" id="inventory">
+                    <div class="slot"></div>
+                    <div class="slot"></div>
+                    <div class="slot"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="touch-controls">
+            <div id="dpad">
+                <button id="up">▲</button>
+                <div class="dpad-mid">
+                    <button id="left">◀</button>
+                    <button id="right">▶</button>
+                </div>
+                <button id="down">▼</button>
+            </div>
+            <div id="action-buttons">
+                <button id="btn-atk">ATK</button>
+                <button id="btn-skill">SPC</button>
+            </div>
+        </div>
+    </div>
+    <script src="game.js"></script>
+</body>
+</html>
+0
